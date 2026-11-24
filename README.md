@@ -2,7 +2,7 @@
 
 [![license](https://img.shields.io/badge/license-MIT-8b5cf6)](LICENSE) [![node](https://img.shields.io/badge/node-%E2%89%A5%2022-8b5cf6)](.node-version) [![dependencies](https://img.shields.io/badge/dependencies-0-8b5cf6)](package.json) [![tests](https://img.shields.io/badge/end--to--end%20checks-89-8b5cf6)](test)
 
-**[nyxlayer2.xyz](https://nyxlayer2.xyz)** · [Docs](https://nyxlayer2.xyz/docs) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
+**[nyxlayer2.xyz](https://nyxlayer2.xyz)** · [Docs](https://nyxlayer2.xyz/docs) · [X](https://x.com/NYXLayer2) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
 
 A private layer 2 on Solana. Balances, payments, trades and launches stay private, and every block is sealed to Solana.
 
