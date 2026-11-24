@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NYX | App</title>
+<meta name="description" content="Hold, pay, trade and launch on NYX, the private layer 2 on Solana.">
+<meta name="theme-color" content="#040208">
+<link rel="icon" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css?v=2">
+</head>
+<body>
+<canvas id="sky"></canvas>
+<div class="shell">
+  <aside class="rail">
+    <button class="tab" data-tab="hold"><i>01</i><span>Hold</span></button>
+    <button class="tab" data-tab="pay"><i>02</i><span>Pay</span></button>
+    <button class="tab" data-tab="trade"><i>03</i><span>Trade</span></button>
+    <button class="tab" data-tab="launch"><i>04</i><span>Launch</span></button>
+    <div class="card ticker mono">
+      <div><span class="mute"><span class="dot"></span>&nbsp; Block</span><b id="tHead">0</b></div>
+      <div><span class="mute">Sealed</span><b id="tSealed">0</b></div>
+      <div><span class="mute" id="tAssetLabel">SOL</span><b id="tUsd">$0</b></div>
+    </div>
+  </aside>
+  <div>
+    <section class="view" id="hold"></section>
+    <section class="view" id="pay"></section>
+    <section class="view" id="trade"></section>
+    <section class="view" id="launch"></section>
+  </div>
+</div>
+<script src="/brand.js?v=2"></script><script src="/common.js?v=2"></script><script src="/scene.js?v=2"></script>
+<script>
+(() => {
+  const { $, $$, B, api, esc, units, parse, num, amount, usd, ago, short, int, W, connect, auth, hasAuth, mine, sendTx, deposit, creditDeposit, toast, nav, onBlock, sha256hex, onWallet, COIN_DEC } = L2;
+  nav('App');
+  L2Scene.start({ gl: $('#sky'), target: () => ({ cover: 1, ring: 0, seal: 0, dim: .42, cx: innerWidth * .86, cy: innerHeight * .2, R: Math.min(innerWidth, innerHeight) * .16 }) });
+  const A = B.asset, DEC = B.decimals, buyKey = B.wallet === 'sol' ? 'solIn' : 'amountIn', sellKey = B.wallet === 'sol' ? 'minSolOut' : 'minOut';
+  const S = { chain: null, me: null, coins: [], usd: 0, tab: 'hold', coin: null, side: 'buy', payLink: null, lastLink: null };
+  const path = location.pathname.split('/').filter(Boolean);
+  if (path[0] === 'coin' && path[1]) { S.tab = 'trade'; S.coin = path[1]; } else if (path[0] === 'pay' && path[1]) { S.tab = 'pay'; S.payLink = { id: path[1], secret: decodeURIComponent(location.hash.slice(1)) }; } else if (['hold', 'pay', 'trade', 'launch'].includes(location.hash.slice(1))) S.tab = location.hash.slice(1);
+  const busy = async (btn, fn) => { if (btn.disabled) return; const t = btn.textContent; btn.disabled = true; btn.textContent = 'Working…'; try { await fn(); } catch (e) { toast(e.message || 'Something went wrong', 'bad'); } finally { btn.disabled = false; btn.textContent = t; } };
+  const sym = (asset) => (asset === A ? A : S.coins.find((c) => c.id === asset)?.symbol || S.me?.balances.find((b) => b.asset === asset)?.symbol || 'coin'), dec = (asset) => (asset === A ? DEC : COIN_DEC);
+  const fmt = (asset, base) => amount(base, dec(asset)) + ' ' + sym(asset), myBal = (asset) => S.me?.balances.find((b) => b.asset === asset)?.amount || '0';
+  const ava = (c) => `<div class="ava"${c.uri ? ` style="background-image:url('${esc(c.uri)}')"` : ''}>${c.uri ? '' : esc(c.symbol[0])}</div>`;
+
+  function show(tab) { S.tab = tab; $$('.tab').forEach((t) => t.classList.toggle('on', t.dataset.tab === tab)); $$('.view').forEach((v) => v.classList.toggle('on', v.id === tab)); render(); }
+  $$('.tab').forEach((t) => (t.onclick = () => { if (t.dataset.tab === 'trade') S.coin = null; history.replaceState(null, '', '/app#' + t.dataset.tab); show(t.dataset.tab); }));
+
+  // ---------- gates ----------
+  function gate(el, what) {
+    if (!W.address) { el.innerHTML = `<div class="card gate"><h3>${what.title}</h3><p>${what.text} Your ${B.settles} wallet is your account here. Nothing new to create, no seed phrase.</p><button class="btn primary" id="gConnect">Connect ${B.walletName}</button></div>`; $('#gConnect', el).onclick = () => connect(); return true; }
+    if (!hasAuth() || !S.me) { el.innerHTML = `<div class="card gate"><h3>Only you can see this.</h3><p>Your balance and history are served to your wallet alone. Sign one message to open them for five minutes. It costs nothing and moves nothing.</p><button class="btn primary" id="gUnlock">Unlock</button></div>`; $('#gUnlock', el).onclick = (e) => busy(e.target, async () => { try { await auth(); } catch { throw new Error('You declined the signature'); } await loadMe(); render(); }); return true; }
+    return false;
+  }
+
+  // ---------- hold ----------
+  function hold() {
+    const el = $('#hold'); if (gate(el, { title: 'A balance nobody can look up.', text: 'Connect to see what you hold.' })) return;
+    const main = myBal(A), coins = S.me.balances.filter((b) => b.asset !== A), total = Number(units(main, DEC)) + coins.reduce((s, b) => s + Number(units(b.amount, COIN_DEC)) * b.price, 0);
+    el.innerHTML = `
+      <div class="card pane"><span class="eyebrow">Your balance. Visible only to you</span>
+        <div class="balance">${num(units(main, DEC), 4)}<small>${A}</small></div>
+        <p class="mute" style="margin:8px 0 22px">${usd(total * S.usd)} in total${coins.length ? ', coins included' : ''}</p>
+        <div class="row" style="justify-content:flex-start"><button class="btn primary" id="bDep">Deposit</button><button class="btn" id="bWd">Withdraw</button><a class="btn" href="#pay" id="bPay">Pay someone</a></div>
+        <div id="door"></div></div>
+      <div class="cols">
+        <div class="card pane"><h3>Coins</h3><div class="list">${coins.length ? coins.map((b) => `<a href="/coin/${b.asset}"><span>${esc(b.name || b.symbol)}<small>${amount(b.amount, COIN_DEC)} ${esc(b.symbol)}</small></span><span class="mono">${usd(Number(units(b.amount, COIN_DEC)) * b.price * S.usd)}</span></a>`).join('') : '<div class="empty">No coins yet. The launchpad is one tab away.</div>'}</div></div>
+        <div class="card pane"><h3>Activity</h3><div class="list" id="hist"><div class="empty">Loading…</div></div></div>
+      </div>
+      <div class="card pane" id="wds" hidden><h3>Withdrawals</h3><div class="list" id="wdList"></div></div>`;
+    $('#bPay').onclick = (e) => { e.preventDefault(); show('pay'); };
+    $('#bDep').onclick = () => { $('#door').innerHTML = `<div style="margin-top:24px;max-width:460px"><label class="f">Amount to bring in<div class="inl"><input class="field" id="dAmt" inputmode="decimal" placeholder="0.5"><span class="btn" style="pointer-events:none">${A}</span></div></label><button class="btn primary wide" id="dGo">Deposit from ${B.walletName}</button><p class="hint">Your wallet sends ${A} to the door on ${B.settles}. It is credited to this wallet on NYX a few seconds after ${B.settles} confirms it. From there on, nobody can see it.</p></div>`.replace(/NYX/g, B.name);
+      $('#dGo').onclick = (e) => busy(e.target, async () => { const n = parse($('#dAmt').value, DEC); if (!n || n === '0') throw new Error('Enter an amount'); let l1; try { l1 = await deposit(n); } catch (x) { throw new Error(x?.message?.includes('door') || x?.message?.includes('answer') ? x.message : 'The deposit was not sent'); } toast('Sent. Waiting for ' + B.settles + ' to confirm it…'); const ok = await creditDeposit(l1); if (!ok) throw new Error('Still waiting on ' + B.settles + '. Your balance will update on its own.'); toast('Deposit credited', 'good'); await loadMe(); render(); }); };
+    $('#bWd').onclick = () => { $('#door').innerHTML = `<div style="margin-top:24px;max-width:460px"><label class="f">Amount to take out<div class="inl"><input class="field" id="wAmt" inputmode="decimal" placeholder="0.5"><button class="btn" id="wMax">Max</button></div></label><label class="f">To any ${B.settles} address<input class="field mono" id="wTo" value="${esc(W.address)}" spellcheck="false"></label><button class="btn primary wide" id="wGo">Withdraw</button><p class="hint">The amount leaves your balance in the next block and is paid out as ${A} from the door. It does not have to go back to the wallet it came from.</p></div>`;
+      $('#wMax').onclick = () => ($('#wAmt').value = units(main, DEC));
+      $('#wGo').onclick = (e) => busy(e.target, async () => { const n = parse($('#wAmt').value, DEC); if (!n || n === '0') throw new Error('Enter an amount'); await sendTx('bridge.withdraw', { asset: A, amount: n, to: $('#wTo').value.trim() }); toast('Withdrawal on its way out', 'good'); await loadMe(); render(); }); };
+    mine('history').then(({ history }) => { const LBL = { 'pay.transfer': 'Paid', 'pay.receive': 'Received', 'pay.link.create': 'Pay link made', 'pay.link.claim': 'Pay link claimed', 'pay.link.cancel': 'Pay link cancelled', 'coin.launch': 'Launched a coin', 'coin.buy': 'Bought', 'coin.sell': 'Sold', 'coin.graduate.claim': 'Claimed', 'bridge.withdraw': 'Withdrawal', 'sys.deposit': 'Deposit', 'sys.payout': 'Paid out', 'sys.refund': 'Refund' };
+      $('#hist').innerHTML = history.length ? history.slice(0, 14).map((h) => { const amt = h.amount && h.asset ? (String(h.amount).startsWith('-') ? '' : '+') + fmt(h.asset, h.amount) : '', tok = h.tokens && h.coin ? (String(h.tokens).startsWith('-') ? '' : '+') + fmt(h.coin, h.tokens) : ''; return `<a href="/tx/${h.hash}"><span>${LBL[h.type] || h.type}${h.status === 'failed' ? ' <span class="pill no">failed</span>' : ''}<small>${h.status === 'failed' ? esc(h.error || '') : ago(h.ts)}</small></span><span class="mono" style="text-align:right">${esc(tok || amt)}${tok && amt ? `<small>${esc(amt)}</small>` : ''}</span></a>`; }).join('') : '<div class="empty">Nothing yet.</div>'; }).catch(() => {});
+    mine('withdrawals').then(({ withdrawals }) => { if (!withdrawals.length) return; $('#wds').hidden = false; $('#wdList').innerHTML = withdrawals.slice(0, 8).map((w) => `<div><span>${fmt(w.asset, w.amount)}<small class="mono">to ${esc(short(w.to, 6, 6))} · ${ago(w.ts)}</small></span><span>${w.l1 && w.status === 'paid' ? `<a class="pill ok" href="${B.tx(w.l1)}" target="_blank" rel="noopener">paid ↗</a>` : `<span class="pill ${w.status === 'refunded' ? 'no' : 'wait'}">${w.status === 'queued' ? (w.kind === 'claim' ? 'claim queued' : 'leaving') : w.status}</span>`}</span></div>`).join(''); }).catch(() => {});
+  }
+
+  // ---------- pay ----------
+  function assetOptions() { return [`<option value="${A}">${A} · ${amount(myBal(A), DEC)}</option>`, ...(S.me?.balances || []).filter((b) => b.asset !== A).map((b) => `<option value="${b.asset}">${esc(b.symbol)} · ${amount(b.amount, COIN_DEC)}</option>`)].join(''); }
+  function pay() {
+    const el = $('#pay'); let claim = '';
+    if (S.payLink) { const l = S.payLink; claim = `<div class="card pane" id="claimBox"><span class="eyebrow">A pay link</span><h3 style="font-size:54px;margin:14px 0 6px" id="clAmt">…</h3><p id="clNote">Somebody locked this for whoever holds the link.</p><button class="btn primary" id="clGo">Claim into my balance</button></div>`;
+      api('/api/links/' + l.id).then((x) => { l.info = x; const b = $('#clAmt'); if (!b) return; b.textContent = amount(x.amount, x.decimals) + ' ' + x.symbol; if (x.status !== 'open') { $('#clNote').textContent = 'This pay link was already ' + x.status + '.'; $('#clGo').remove(); } }).catch(() => { const n = $('#clNote'); if (n) { n.textContent = 'This pay link does not exist.'; $('#clGo')?.remove(); $('#clAmt').textContent = 'Not found'; } }); }
+    if (!W.address || !hasAuth() || !S.me) { const g = document.createElement('div'); gate(g, { title: 'Send to anyone. The amount stays between you.', text: 'Connect to pay.' }); el.innerHTML = claim; el.append(...g.childNodes); wireClaim(); return; }
+    el.innerHTML = claim + `<div class="cols" style="margin-top:${claim ? 16 : 0}px">
+      <div class="card pane"><h3>Send</h3><p>Straight to another account. Sender, receiver and amount never reach the public record.</p>
+        <label class="f">To<input class="field mono" id="pTo" placeholder="${B.settles} address" spellcheck="false"></label>
+        <label class="f">Amount<div class="inl"><input class="field" id="pAmt" inputmode="decimal" placeholder="0.00"><select class="field" id="pAsset" style="max-width:190px">${assetOptions()}</select></div></label>
+        <label class="f">Note, only they see it<input class="field" id="pMemo" maxlength="140" placeholder="Optional"></label>
+        <button class="btn primary wide" id="pGo">Send</button></div>
+      <div class="card pane"><h3>Pay link</h3><p>Lock an amount behind a link. Whoever opens it claims the funds. No address needed.</p>
+        <label class="f">Amount<div class="inl"><input class="field" id="lAmt" inputmode="decimal" placeholder="0.00"><select class="field" id="lAsset" style="max-width:190px">${assetOptions()}</select></div></label>
+        <label class="f">Stays open for<select class="field" id="lDays"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option><option value="90">90 days</option></select></label>
+        <button class="btn wide" id="lGo">Create link</button><div id="lOut">${S.lastLink ? linkBox(S.lastLink) : ''}</div></div></div>
+      <div class="card pane"><h3>Your links</h3><div class="list" id="links"><div class="empty">Loading…</div></div></div>`;
+    wireClaim();
+    $('#pGo').onclick = (e) => busy(e.target, async () => { const asset = $('#pAsset').value, n = parse($('#pAmt').value, dec(asset)); if (!n || n === '0') throw new Error('Enter an amount'); const memo = $('#pMemo').value.trim(); await sendTx('pay.transfer', { to: $('#pTo').value.trim(), asset, amount: n, ...(memo ? { memo } : {}) }); toast('Sent', 'good'); await loadMe(); render(); });
+    $('#lGo').onclick = (e) => busy(e.target, async () => { const asset = $('#lAsset').value, n = parse($('#lAmt').value, dec(asset)); if (!n || n === '0') throw new Error('Enter an amount'); const secret = [...crypto.getRandomValues(new Uint8Array(18))].map((x) => x.toString(16).padStart(2, '0')).join(''); const r = await sendTx('pay.link.create', { asset, amount: n, claimHash: await sha256hex(secret), expiresAt: Date.now() + (+$('#lDays').value) * 864e5 - 60_000 }); S.lastLink = location.origin + '/pay/' + r.result.link + '#' + secret; toast('Link ready', 'good'); await loadMe(); render(); });
+    mine('links').then(({ links }) => { $('#links').innerHTML = links.length ? links.map((l) => `<div><span>${fmt(l.asset, l.amount)}<small>made ${ago(l.createdAt)}</small></span><span>${l.status === 'open' ? `<button class="btn small" data-cancel="${l.id}">Cancel and refund</button>` : `<span class="pill ${l.status === 'claimed' ? 'ok' : ''}">${l.status}</span>`}</span></div>`).join('') : '<div class="empty">No links yet.</div>'; $$('[data-cancel]').forEach((b) => (b.onclick = () => busy(b, async () => { await sendTx('pay.link.cancel', { id: b.dataset.cancel }); toast('Cancelled and refunded', 'good'); await loadMe(); render(); }))); }).catch(() => {});
+  }
+  const linkBox = (u) => `<div class="linkbox"><span class="mute">Share this link. Anyone who has it can claim, so send it privately.</span><code>${esc(u)}</code><button class="btn small" data-copy="${esc(u)}">Copy link</button></div>`;
+  function wireClaim() { const b = $('#clGo'); if (!b) return; b.onclick = () => busy(b, async () => { const l = S.payLink; await sendTx('pay.link.claim', { id: l.id, secret: l.secret }); toast('Claimed', 'good'); S.payLink = null; history.replaceState(null, '', '/app#hold'); if (hasAuth()) await loadMe(); show('hold'); }); }
+
+  // ---------- trade ----------
+  let quoteTimer;
+  function trade() {
+    const el = $('#trade');
+    if (!S.coin) {
+      el.innerHTML = `<div class="card pane" style="margin-bottom:16px"><span class="eyebrow">Markets</span><h3 style="font-size:46px;margin-top:12px">Every coin, on its own curve.</h3><p style="margin:6px 0 0">Prices are public. Who is buying is not.</p></div>` + (S.coins.length ? `<div class="coins">${S.coins.map((c) => `<a class="card coin" href="/coin/${c.id}" data-coin="${c.id}"><div class="top">${ava(c)}<div><h4>${esc(c.name)}</h4><span class="mono mute" style="font-size:12.5px">${esc(c.symbol)}</span></div><span class="pill ${c.status === 'curve' ? '' : 'ok'}" style="margin-left:auto">${c.status === 'curve' ? 'live' : c.status}</span></div><div class="px"><b>${usd(c.marketCapUsd)}</b><span class="mono ${c.change >= 0 ? 'good' : 'badc'}" style="font-size:13px">${c.change >= 0 ? '+' : ''}${(c.change * 100).toFixed(1)}%</span></div><div><div class="bar"><i style="width:${(c.progress * 100).toFixed(1)}%"></i></div><div class="mono faint" style="font-size:11.5px;margin-top:8px;display:flex;justify-content:space-between"><span>curve ${(c.progress * 100).toFixed(1)}%</span><span>${int(c.trades)} trades</span></div></div></a>`).join('')}</div>` : `<div class="card empty" style="padding:70px 20px">No coins have launched yet. <a href="#launch" id="goLaunch" style="color:var(--c2)">Be the first.</a></div>`);
+      $$('[data-coin]', el).forEach((a) => (a.onclick = (e) => { e.preventDefault(); openCoin(a.dataset.coin); })); const g = $('#goLaunch'); if (g) g.onclick = (e) => { e.preventDefault(); show('launch'); }; return;
+    }
+    const c = S.coins.find((x) => x.id === S.coin); if (!c) { el.innerHTML = '<div class="card empty" style="padding:70px 20px">Loading this coin…</div>'; return; }
+    const held = myBal(c.id), live = c.status === 'curve' || c.status === 'complete', left = c.status === 'graduating' || c.status === 'graduated';
+    if (el.dataset.coin !== c.id || el.dataset.status !== c.status || el.dataset.side !== S.side || el.dataset.w !== String(W.address) + hasAuth()) {
+      Object.assign(el.dataset, { coin: c.id, status: c.status, side: S.side, w: String(W.address) + hasAuth() });
+      el.innerHTML = `<button class="back" id="back">← All coins</button>
+      <div class="trade"><div class="card pane"><div style="display:flex;gap:14px;align-items:center;margin-bottom:18px">${ava(c)}<div><h3 style="margin:0">${esc(c.name)}</h3><span class="mono mute" style="font-size:13px">${esc(c.symbol)} · launched ${ago(c.createdAt)}</span></div><div style="margin-left:auto;text-align:right"><div class="mono" style="font-size:22px" id="cMc"></div><span class="mono faint" style="font-size:12px">market cap</span></div></div>
+        <canvas id="chart"></canvas>
+        <div style="margin-top:18px"><div class="bar"><i id="cBar"></i></div><div class="mono faint" style="font-size:12px;margin-top:9px;display:flex;justify-content:space-between"><span id="cProg"></span><span id="cVol"></span></div></div></div>
+      <div class="card pane">${left ? `<h3>Graduated</h3><p>This coin has left the curve. Claim your tokens to any ${B.settles} address.</p><div class="quote"><div><span>You hold</span><b>${amount(held, COIN_DEC)} ${esc(c.symbol)}</b></div></div><label class="f">Send my tokens to<input class="field mono" id="gTo" value="${esc(W.address || '')}" spellcheck="false"></label><button class="btn primary wide" id="gGo">Claim</button>` : `<div class="seg"><button data-side="buy" class="${S.side === 'buy' ? 'on' : ''}">Buy</button><button data-side="sell" class="${S.side === 'sell' ? 'on' : ''}">Sell</button></div>
+        <label class="f">${S.side === 'buy' ? 'You pay' : 'You sell'}<div class="inl"><input class="field" id="tAmt" inputmode="decimal" placeholder="0.00"><span class="btn" style="pointer-events:none">${S.side === 'buy' ? A : esc(c.symbol)}</span></div></label>
+        <div class="row" style="justify-content:flex-start;margin:-4px 0 14px">${(S.side === 'buy' ? ['0.1', '0.5', '1'] : ['25%', '50%', '100%']).map((v) => `<button class="btn small" data-quick="${v}">${v}</button>`).join('')}</div>
+        <div class="quote"><div><span>You get about</span><b id="qOut">0</b></div><div><span>Trade fee, 1%</span><b id="qFee">0</b></div><div><span>You hold</span><b>${hasAuth() ? amount(held, COIN_DEC) + ' ' + esc(c.symbol) : 'Unlock to see'}</b></div></div>
+        <button class="btn primary wide" id="tGo">${S.side === 'buy' ? 'Buy ' : 'Sell '}${esc(c.symbol)}</button><p class="hint">Half of every fee goes to whoever launched the coin. Nobody sees who that is, or who you are.</p>`}</div></div>`;
+      $('#back').onclick = () => { S.coin = null; delete el.dataset.coin; history.replaceState(null, '', '/app#trade'); render(); };
+      $$('[data-side]', el).forEach((b) => (b.onclick = () => { S.side = b.dataset.side; render(); }));
+      const inp = $('#tAmt'), doQuote = () => { clearTimeout(quoteTimer); quoteTimer = setTimeout(async () => { const n = parse(inp.value, S.side === 'buy' ? DEC : COIN_DEC); if (!n || n === '0') { $('#qOut').textContent = '0'; $('#qFee').textContent = '0'; return; } try { const q = await api(`/api/coins/${c.id}/quote?side=${S.side}&amount=${n}`); inp.dataset.out = q.out; $('#qOut').textContent = S.side === 'buy' ? amount(q.out, COIN_DEC) + ' ' + c.symbol : amount(q.out, DEC, 6) + ' ' + A; $('#qFee').textContent = amount(q.fee, DEC, 6) + ' ' + A; } catch {} }, 220); };
+      if (inp) { inp.oninput = doQuote; $$('[data-quick]', el).forEach((b) => (b.onclick = () => { inp.value = S.side === 'buy' ? b.dataset.quick : units((BigInt(held) * BigInt(parseInt(b.dataset.quick)) / 100n).toString(), COIN_DEC); doQuote(); }));
+        $('#tGo').onclick = (e) => busy(e.target, async () => { const n = parse(inp.value, S.side === 'buy' ? DEC : COIN_DEC); if (!n || n === '0') throw new Error('Enter an amount'); const q = await api(`/api/coins/${c.id}/quote?side=${S.side}&amount=${n}`), min = (BigInt(q.out) * 97n / 100n).toString();
+          await sendTx(S.side === 'buy' ? 'coin.buy' : 'coin.sell', S.side === 'buy' ? { coin: c.id, [buyKey]: n, minOut: min } : { coin: c.id, amountIn: n, [sellKey]: min }); toast(S.side === 'buy' ? 'Bought' : 'Sold', 'good'); inp.value = ''; delete el.dataset.coin; await Promise.all([loadCoins(), hasAuth() ? loadMe() : null]); render(); }); }
+      const g = $('#gGo'); if (g) g.onclick = () => busy(g, async () => { await sendTx('coin.graduate.claim', { coin: c.id, to: $('#gTo').value.trim() }); toast('Claim registered', 'good'); delete el.dataset.coin; await loadMe(); render(); });
+      drawChart(c.id);
+    }
+    $('#cMc').textContent = usd(c.marketCapUsd); $('#cBar').style.width = (c.progress * 100).toFixed(1) + '%'; $('#cProg').textContent = 'curve ' + (c.progress * 100).toFixed(1) + '% sold'; $('#cVol').textContent = usd(c.volumeUsd) + ' volume · ' + int(c.trades) + ' trades';
+  }
+  function openCoin(id) { S.coin = id; history.replaceState(null, '', '/coin/' + id); render(); scrollTo({ top: 0 }); }
+  async function drawChart(id) {
+    const cv = $('#chart'); if (!cv) return; let k = []; try { k = (await api(`/api/coins/${id}/candles`)).candles.slice(-90); } catch {}
+    const d = Math.min(devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight; cv.width = w * d; cv.height = h * d; const g = cv.getContext('2d'); g.scale(d, d); g.clearRect(0, 0, w, h);
+    const css = getComputedStyle(document.documentElement), c1 = css.getPropertyValue('--c1').trim(), c2 = css.getPropertyValue('--c2').trim(), bad = css.getPropertyValue('--bad').trim();
+    if (!k.length) { g.fillStyle = 'rgba(255,255,255,.35)'; g.font = '14px Geist, sans-serif'; g.textAlign = 'center'; g.fillText('The first trade draws the first candle.', w / 2, h / 2); return; }
+    const hi = Math.max(...k.map((x) => x[2])), lo = Math.min(...k.map((x) => x[3])), pad = (hi - lo) * .12 || hi * .05, top = hi + pad, bot = lo - pad, y = (v) => 10 + (h - 30) * (1 - (v - bot) / (top - bot)), slot = Math.min(22, (w - 20) / k.length), x0 = w - 12 - slot * k.length;
+    g.strokeStyle = 'rgba(255,255,255,.06)'; g.lineWidth = 1; for (let i = 0; i < 4; i++) { const yy = 10 + (h - 30) * i / 3; g.beginPath(); g.moveTo(0, yy); g.lineTo(w, yy); g.stroke(); }
+    k.forEach((x, i) => { const up = x[4] >= x[1], cx = x0 + slot * (i + .5), col = up ? c2 : bad; g.strokeStyle = col; g.fillStyle = col; g.beginPath(); g.moveTo(cx, y(x[2])); g.lineTo(cx, y(x[3])); g.stroke(); const a = y(Math.max(x[1], x[4])), b = y(Math.min(x[1], x[4])); g.fillRect(cx - slot * .32, a, slot * .64, Math.max(1.5, b - a)); });
+    g.fillStyle = 'rgba(255,255,255,.4)'; g.font = '11px "Geist Mono", monospace'; g.textAlign = 'left'; g.fillText('1 minute candles · price in ' + A, 4, h - 6); g.textAlign = 'right'; g.fillStyle = c1; g.fillText(num(k[k.length - 1][4], 9) + ' ' + A, w - 4, h - 6);
+  }
+
+  // ---------- launch ----------
+  function launch() {
+    const el = $('#launch'); if (el.dataset.w === String(W.address) && el.firstChild) return; el.dataset.w = String(W.address);
+    el.innerHTML = `<div class="cols" style="margin-top:0"><div class="card pane"><span class="eyebrow">Launchpad</span><h3 style="font-size:46px;margin:12px 0 6px">Coins that start in the dark.</h3><p>No deployer wallet for anyone to watch. Your coin trades the second it exists.</p>
+      <label class="f">Name<input class="field" id="nName" maxlength="32" placeholder="Midnight Oil"></label>
+      <label class="f">Symbol<input class="field mono" id="nSym" maxlength="10" placeholder="OIL" style="text-transform:uppercase"></label>
+      <label class="f">Image link, optional<input class="field" id="nUri" placeholder="https://"></label>
+      <label class="f">Your first buy, optional<div class="inl"><input class="field" id="nBuy" inputmode="decimal" placeholder="0.00"><span class="btn" style="pointer-events:none">${A}</span></div></label>
+      <label class="switch"><input type="checkbox" id="nGrad" checked><span>Graduate in public<small>When the curve completes, the coin can leave for a public pool on ${B.settles} and holders claim real tokens.</small></span></label>
+      <button class="btn primary wide" id="nGo">${W.address ? 'Launch' : 'Connect ' + B.walletName}</button></div>
+      <div class="card pane"><h3>The rules</h3><p>The same for every coin. Nobody gets a different deal.</p><div class="list">
+        <div><span>Supply</span><span class="mono">1,000,000,000</span></div><div><span>Sold on the curve</span><span class="mono">793,100,000</span></div><div><span>Trade fee</span><span class="mono">1%</span></div><div><span>Your share of every fee</span><span class="mono">50%</span></div><div><span>Cost to launch</span><span class="mono">Free</span></div><div><span>Who can see you made it</span><span class="mono">Only you</span></div></div></div></div>`;
+    $('#nGo').onclick = (e) => busy(e.target, async () => { if (!W.address) { await connect(); render(); return; } const name = $('#nName').value.trim(), symbol = $('#nSym').value.trim(), uri = $('#nUri').value.trim(), first = $('#nBuy').value.trim() ? parse($('#nBuy').value, DEC) : null; if (!name) throw new Error('Give your coin a name'); if (!/^[A-Za-z0-9]{1,10}$/.test(symbol)) throw new Error('Symbol is 1 to 10 letters or digits'); if ($('#nBuy').value.trim() && !first) throw new Error('First buy is not a valid amount');
+      const r = await sendTx('coin.launch', { name, symbol, publicGraduation: $('#nGrad').checked, ...(uri ? { uri } : {}), ...(first && first !== '0' ? { initialBuy: first } : {}) }); toast(symbol.toUpperCase() + ' is live', 'good'); el.innerHTML = ''; await Promise.all([loadCoins(), hasAuth() ? loadMe() : null]); S.tab = 'trade'; openCoin(r.result.coin); show('trade'); });
+  }
+
+  // ---------- data ----------
+  const render = () => ({ hold, pay, trade, launch })[S.tab]();
+  async function loadMe() { if (!W.address || !hasAuth()) { S.me = null; return; } try { S.me = await mine('balances'); } catch { S.me = null; } }
+  async function loadCoins() { try { const r = await api('/api/coins'); S.coins = r.coins; S.usd = r.usd; $('#tUsd').textContent = usd(r.usd); } catch {} }
+  async function loadChain() { try { const c = S.chain = await api('/api/chain'); $('#tHead').textContent = int(c.head); $('#tSealed').textContent = c.sealedBlock == null ? 'soon' : int(c.sealedBlock); } catch {} }
+  $('#tAssetLabel').textContent = A;
+  onWallet(async () => { $('#launch').innerHTML = ''; await loadMe(); render(); });
+  onBlock((b) => { $('#tHead').textContent = int(b.height); if (b.txCount) { loadCoins().then(() => { if (S.tab === 'trade') { trade(); if (S.coin) drawChart(S.coin); } }); if (hasAuth()) loadMe().then(() => { if (S.tab === 'hold' && !$('#door')?.firstChild) hold(); }); } });
+  setInterval(loadChain, 8000);
+  (async () => { show(S.tab); await Promise.all([loadChain(), loadCoins()]); await new Promise((r) => setTimeout(r, 350)); await loadMe(); render(); })();
+})();
+</script>
+</body>
+</html>
