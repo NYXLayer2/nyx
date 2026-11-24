@@ -30,7 +30,19 @@ main, footer { position: relative; z-index: 2; }
 .btn.primary { background: var(--ink); color: #08040f; border-color: var(--ink); box-shadow: 0 0 40px -6px color-mix(in srgb, var(--c1) 70%, transparent); }
 .btn.primary:hover { box-shadow: 0 0 60px -4px color-mix(in srgb, var(--c2) 70%, transparent); }
 .btn.wide { width: 100%; }
+.social { display: flex; gap: 8px; } .social:empty { display: none; }
+.social a { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, .16); background: rgba(255, 255, 255, .05); color: var(--mute); transition: color .2s, border-color .2s, background .2s; }
+.social a:hover { color: var(--ink); border-color: rgba(255, 255, 255, .42); background: rgba(255, 255, 255, .12); } .social svg { width: 16px; height: 16px; }
 @media (max-width: 760px) { .nav nav a:nth-child(n+3) { display: none; } .nav { gap: 14px; } }
+@media (max-width: 460px) { .nav nav { display: none; } .social { margin-left: auto; } }
+
+/* faq */
+.faq { position: relative; z-index: 2; padding: clamp(70px, 10vw, 140px) clamp(22px, 6vw, 92px); background: linear-gradient(180deg, rgba(4, 2, 8, 0), rgba(4, 2, 8, .86) 14%, rgba(4, 2, 8, .92)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); scroll-margin-top: 60px; }
+.faq-in { max-width: 920px; margin: 0 auto; } .faq h2 { font-size: clamp(44px, 6.4vw, 92px); margin: 18px 0 34px; } .faq h2 em { font-style: italic; background: linear-gradient(100deg, var(--c1), var(--c2)); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .08em; }
+.faq-list { border-top: 1px solid rgba(255, 255, 255, .2); } .faq details { border-bottom: 1px solid var(--line); }
+.faq summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 22px; align-items: baseline; padding: 22px 0; font-family: var(--serif); font-size: clamp(23px, 2.5vw, 32px); line-height: 1.15; transition: color .2s; }
+.faq summary::-webkit-details-marker { display: none; } .faq summary::after { content: '+'; font-family: var(--mono); font-size: 20px; color: var(--c2); flex: none; } .faq details[open] summary::after { content: '−'; }
+.faq summary:hover { color: var(--c2); } .faq details p { color: var(--mute); font-size: 16.5px; line-height: 1.65; max-width: 44em; padding: 0 0 26px; } .faq details p a { color: var(--ink); border-bottom: 1px solid var(--c2); }
 
 /* landing acts */
 .act { min-height: 125vh; display: grid; padding: 16vh clamp(22px, 6vw, 92px); }

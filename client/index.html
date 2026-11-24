@@ -11,7 +11,7 @@
 <meta property="og:image" content="/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.svg">
-<link rel="stylesheet" href="/style.css?v=2">
+<link rel="stylesheet" href="/style.css?v=3">
 </head>
 <body>
 <canvas id="sky"></canvas><canvas id="fx"></canvas>
@@ -64,12 +64,14 @@
     <div id="caBox"></div>
     <div class="row"><a class="btn primary" href="/app">Enter NYX</a><span id="buyBox"></span></div>
   </div></section>
+
+  <section class="faq" id="faq"></section>
 </main>
-<footer><span>NYX. A private layer 2 on Solana.</span><nav><a href="/explorer">Explorer</a><a href="/docs">Docs</a><a href="/whitepaper">Whitepaper</a><a href="/developers">Developers</a></nav></footer>
-<script src="/brand.js?v=2"></script><script src="/common.js?v=2"></script><script src="/scene.js?v=2"></script>
+<footer><span>NYX. A private layer 2 on Solana.</span><nav><a href="/explorer">Explorer</a><a href="/docs">Docs</a><a href="/whitepaper">Whitepaper</a><a href="/developers">Developers</a><a href="#faq">FAQ</a></nav></footer>
+<script src="/brand.js?v=3"></script><script src="/common.js?v=3"></script><script src="/scene.js?v=2"></script>
 <script>
 (() => {
-  const { $, $$, api, int, short, B, nav, onBlock, esc } = L2, { smooth, lerp } = L2Scene; nav();
+  const { $, $$, api, int, short, B, nav, onBlock, esc } = L2, { smooth, lerp } = L2Scene; nav(); L2.faq($('#faq'));
   // the camera: one set of numbers per act, blended by how far you have scrolled
   const acts = $$('.act'), K = [
     { cover: 0, ring: 0, seal: 0, dim: 0, x: .5, y: .37, r: .125 },
