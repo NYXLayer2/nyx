@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NYX | Docs</title>
+<meta name="description" content="How NYX works: the chain, the door, the seal, the launchpad, and the API.">
+<meta name="theme-color" content="#040208">
+<link rel="icon" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css?v=2">
+</head>
+<body>
+<canvas id="sky"></canvas>
+<main class="page">
+  <div class="head"><span class="eyebrow">Docs</span><h1>How the dark <em>is built.</em></h1><p>{name} is a chain where balances, payments, trades and launches stay private, and every block is sealed to {settles}.</p></div>
+  <div class="docs">
+    <aside>
+      <b>Protocol</b><a href="#design">Design</a><a href="#accounts">Accounts and transactions</a><a href="#blocks">Blocks</a><a href="#settlement">Settlement</a><a href="#door">The door</a><a href="#privacy">Privacy</a><a href="#apps">Pay, trade, launch</a><a href="#rules">Rules</a><a href="#proof">Proof</a>
+      <b>Developers</b><a href="#api">Read the chain</a><a href="#private">Private data</a><a href="#send">Send a transaction</a><a href="#types">Transaction types</a><a href="#mcp">AI agents</a><a href="#faq">Questions</a>
+    </aside>
+    <article>
+      <h2 id="design">Design</h2>
+      <p>{settles} is fast and open, and open means every wallet is a public record. One address shows a balance, every payment, every trade and every launch. Traders get copied, orders get front run and creators get watched.</p>
+      <p>{name} is a layer 2 chain on {settles} where privacy is the starting point. It has three parts.</p>
+      <ul>
+        <li><strong>The chain.</strong> Accounts, transactions, blocks and state. Every change of state is a signed transaction inside a block.</li>
+        <li><strong>The seal.</strong> Receipts of {name} blocks written to {settles} in a hash chain that only moves forward.</li>
+        <li><strong>The door.</strong> A vault on {settles} that holds deposited {asset} and pays out withdrawals.</li>
+      </ul>
+
+      <h2 id="accounts">Accounts and transactions</h2>
+      <p>A {name} account is your {settles} address. There is no new wallet and no new seed phrase.</p>
+      <p>A transaction is a canonical JSON message with a type, a body, the sender and a nonce, signed with the sender's {settles} key through the wallet's message signing. Nonces are counted per account, so a transaction can never be replayed or applied twice.</p>
+      <p>Deposits, payouts and refunds enter as system transactions, so every movement of value appears in a block.</p>
+
+      <h2 id="blocks">Blocks</h2>
+      <p>Transactions are ordered into blocks, one a second while there is activity and one a minute when the chain is quiet. Each block header holds:</p>
+      <ul>
+        <li><code>height</code> and <code>parentHash</code>, chaining every block to the one before it</li>
+        <li><code>timestamp</code> and <code>txCount</code></li>
+        <li><code>txRoot</code>, the Merkle root of the block's transaction hashes</li>
+        <li><code>stateRoot</code>, the Merkle root of the full chain state after the block</li>
+      </ul>
+      <p>The block hash is the SHA256 of the canonical header, and the block is signed by the {name} block producer key with ed25519. In the Merkle tree a leaf is <code>SHA256(0x00 || key || 0x00 || SHA256(value))</code> and each pair above it is <code>SHA256(0x01 || left || right)</code>. Any change to any account changes the state root.</p>
+
+      <h2 id="settlement">Settlement on {settles}</h2>
+      <p>Every ten seconds {name} writes a receipt covering its newest blocks. A receipt carries the block range, a Merkle root over the block hashes in it, the state root after the last block, the last block hash and the transaction count.</p>
+      <p>Every receipt starts exactly one block after the one before it, so receipts never skip a block. Each one extends a hash chain:</p>
+      <pre><code>checkpoint = SHA256(prev_checkpoint || from || to || blocks_root || state_root || last_block_hash || tx_count)</code></pre>
+      <p data-only="sol">On Solana each receipt is a transaction signed by the chain authority that carries every field in a Memo instruction, so it can be read straight from the transaction and matched against the same blocks in the explorer.</p>
+      <p data-only="evm">On {settles} each receipt is a call to the settlement contract. The contract accepts receipts only from the chain authority, enforces that each one starts one block after the last, recomputes the checkpoint itself and emits every field in an event.</p>
+
+      <h2 id="door">The door</h2>
+      <p>A deposit sends {asset} from your {settles} wallet into the door, and {name} credits the same address in a system transaction a few seconds after {settles} confirms it.</p>
+      <p>A withdrawal is a signed {name} transaction naming any {settles} address. The amount leaves your balance in the same block, and the door pays it out as {asset}. Every payout happens exactly once: the settlement transaction is signed and recorded before it is broadcast, and a retry checks that record first. If a payout can never succeed, the amount is refunded on {name}.</p>
+
+      <h2 id="privacy">Privacy</h2>
+      <p>{name} separates what proves the chain from what belongs to you.</p>
+      <div class="two">
+        <div class="card"><h4 class="good">Public</h4><ul><li>Blocks, hashes and state roots</li><li>Transaction hash, type and status</li><li>Coin prices, curves and candles</li><li>Receipts on {settles}</li></ul></div>
+        <div class="card"><h4>Private</h4><ul><li>Who sent a transaction</li><li>Who received it</li><li>Amounts and balances</li><li>Who created a coin</li></ul></div>
+      </div>
+      <p>Private account data is only served to its owner, who proves ownership by signing a fresh timestamped message with their {settles} key. The block producer orders transactions, so it processes them; nothing private is published to the explorer, the API or {settles}.</p>
+
+      <h2 id="apps">Pay, trade, launch</h2>
+      <h3>Payments</h3><p>Send {asset} or any {name} coin to any account. Sender, receiver and amount stay private.</p>
+      <h3>Pay links</h3><p>Lock an amount behind a link and share it. The link holds a secret; the chain holds only its hash. Whoever opens the link claims the funds into their own account. An unclaimed link can be cancelled by its maker for a full refund.</p>
+      <h3>Markets</h3><p>Every coin trades on its own bonding curve inside {name}, with price, market cap and volume shown in USD. The curve is a constant product over virtual reserves, so the price moves with every trade and there is always a quote.</p>
+      <h3>Launchpad</h3><p>Anyone can launch a coin, and the creator earns half of every trade fee. When the curve completes, a coin set for public graduation stops trading on the curve and every holder registers a claim to any {settles} address.</p>
+
+      <h2 id="rules">Rules</h2>
+      <div class="card tablewrap"><table><thead><tr><th>Rule</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Block time</td><td>1 s</td></tr><tr><td>Quiet chain block</td><td>every 1 min</td></tr><tr><td>Max transactions per block</td><td>500</td></tr><tr><td>Receipt to {settles}</td><td>every 10 s</td></tr>
+        <tr><td>Trade fee</td><td>1%</td></tr><tr><td>Creator share of the trade fee</td><td>50%</td></tr><tr><td>Coin supply</td><td>1,000,000,000 tokens</td></tr><tr><td>Curve completes</td><td>when 793,100,000 tokens are sold</td></tr>
+        <tr><td>Cost to launch</td><td>Free</td></tr><tr><td>Pay link expiry</td><td>up to 90 days</td></tr><tr><td>Withdrawal minimum</td><td id="minW"></td></tr></tbody></table></div>
+
+      <h2 id="proof">Proof</h2>
+      <p>Check every address and every receipt yourself.</p>
+      <div class="card kv" id="proofBox"><div>Loading</div><div>…</div></div>
+      <h3>Recent receipts</h3>
+      <div class="card tablewrap"><table><thead><tr><th>Blocks</th><th>Txs</th><th>Receipt</th><th>Time</th></tr></thead><tbody id="recs"><tr><td colspan="4" class="faint">No receipts yet.</td></tr></tbody></table></div>
+
+      <h2 id="api">Read the chain</h2>
+      <p>Every public endpoint is open, JSON in and JSON out. Amounts are strings in base units: {asset} has <span id="decs"></span> decimals, {name} coins have 6.</p>
+      <div class="card tablewrap"><table><tbody>
+        <tr><td class="mono">GET /api/chain</td><td>Chain id, head block, state root and the latest receipt</td></tr>
+        <tr><td class="mono">GET /api/blocks</td><td>Latest blocks with tx root and state root</td></tr>
+        <tr><td class="mono">GET /api/blocks/:id</td><td>One block by height or hash</td></tr>
+        <tr><td class="mono">GET /api/tx/:hash</td><td>Public view of a transaction and its status</td></tr>
+        <tr><td class="mono">GET /api/checkpoints</td><td>Receipts written to {settles}</td></tr>
+        <tr><td class="mono">GET /api/coins</td><td>Every coin with price, market cap and curve progress in USD</td></tr>
+        <tr><td class="mono">GET /api/coins/:id</td><td>One coin</td></tr>
+        <tr><td class="mono">GET /api/coins/:id/candles</td><td>Price candles for charts</td></tr>
+        <tr><td class="mono">GET /api/coins/:id/quote</td><td>Quote a buy or sell: <code>?side=buy&amp;amount=…</code></td></tr>
+        <tr><td class="mono">GET /api/nonce/:address</td><td>Next nonce for an account</td></tr>
+        <tr><td class="mono">GET /api/stream</td><td>Live stream of new blocks (server-sent events)</td></tr>
+        <tr><td class="mono">POST /api/tx</td><td>Send a signed transaction. Add <code>?wait=1</code> to wait for the block</td></tr></tbody></table></div>
+      <p style="margin-top:14px">Limits: 300 requests a minute per address for the API, and 60 a minute for sending transactions.</p>
+
+      <h2 id="private">Private data</h2>
+      <p>Balances, history, links and withdrawals are readable only by the wallet that owns them. Sign a short message with the wallet and send three headers. One signature is good for five minutes.</p>
+      <pre><code>x-l2-pubkey: &lt;your address&gt;
+x-l2-ts:     &lt;time in ms&gt;
+x-l2-sig:    &lt;signature of "{tag} auth v1\n" + address + "\n" + ts&gt;</code></pre>
+      <p>Then call <code>/api/me/balances</code>, <code>/api/me/history</code>, <code>/api/me/links</code> and <code>/api/me/withdrawals</code>.</p>
+
+      <h2 id="send">Send a transaction</h2>
+      <p>A transaction is a small JSON object signed with the sender's {settles} key. The wallet signs the text <code>{tag} tx v1</code>, a new line, and the canonical JSON of the unsigned fields: keys sorted at every level, no spaces. The transaction hash is the SHA256 of those bytes.</p>
+      <pre data-only="sol"><code>import bs58 from 'bs58';
+
+function canonicalJson(v) {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return '[' + v.map(canonicalJson).join(',') + ']';
+  const keys = Object.keys(v).filter((k) =&gt; v[k] !== undefined).sort();
+  return '{' + keys.map((k) =&gt; JSON.stringify(k) + ':' + canonicalJson(v[k])).join(',') + '}';
+}
+
+async function sendTx(wallet, type, body) {
+  const base = '<span class="origin"></span>';
+  const from = wallet.publicKey.toBase58();
+  const { nonce } = await (await fetch(base + '/api/nonce/' + from)).json();
+  const unsigned = { chainId: '{chainId}', from, nonce, type, body };
+  const msg = new TextEncoder().encode('{tag} tx v1\n' + canonicalJson(unsigned));
+  const { signature } = await wallet.signMessage(msg);
+  const res = await fetch(base + '/api/tx?wait=1', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...unsigned, sig: bs58.encode(signature) }),
+  });
+  return res.json();
+}
+
+await sendTx(wallet, 'pay.transfer', { to: '&lt;address&gt;', asset: 'SOL', amount: '100000000' });</code></pre>
+      <pre data-only="evm"><code>function canonicalJson(v) {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return '[' + v.map(canonicalJson).join(',') + ']';
+  const keys = Object.keys(v).filter((k) =&gt; v[k] !== undefined).sort();
+  return '{' + keys.map((k) =&gt; JSON.stringify(k) + ':' + canonicalJson(v[k])).join(',') + '}';
+}
+
+// signer: an ethers v6 Signer, or anything with signMessage (personal_sign)
+async function sendTx(signer, type, body) {
+  const base = '<span class="origin"></span>';
+  const from = (await signer.getAddress()).toLowerCase();
+  const { nonce } = await (await fetch(base + '/api/nonce/' + from)).json();
+  const unsigned = { chainId: '{chainId}', from, nonce, type, body };
+  const sig = await signer.signMessage('{tag} tx v1\n' + canonicalJson(unsigned));
+  const res = await fetch(base + '/api/tx?wait=1', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...unsigned, sig }),
+  });
+  return res.json();
+}
+
+await sendTx(signer, 'pay.transfer', { to: '&lt;address&gt;', asset: 'ETH', amount: '10000000000000000' });</code></pre>
+
+      <h2 id="types">Transaction types</h2>
+      <div class="card tablewrap"><table><thead><tr><th>Type</th><th>Body</th></tr></thead><tbody class="mono">
+        <tr><td>pay.transfer</td><td>{ to, asset, amount, memo? }</td></tr><tr><td>pay.link.create</td><td>{ asset, amount, claimHash, expiresAt }</td></tr><tr><td>pay.link.claim</td><td>{ id, secret }</td></tr><tr><td>pay.link.cancel</td><td>{ id }</td></tr>
+        <tr><td>coin.launch</td><td>{ name, symbol, publicGraduation, uri?, initialBuy? }</td></tr><tr data-only="sol"><td>coin.buy</td><td>{ coin, solIn, minOut }</td></tr><tr data-only="sol"><td>coin.sell</td><td>{ coin, amountIn, minSolOut }</td></tr><tr data-only="evm"><td>coin.buy</td><td>{ coin, amountIn, minOut }</td></tr><tr data-only="evm"><td>coin.sell</td><td>{ coin, amountIn, minOut }</td></tr>
+        <tr><td>coin.graduate.claim</td><td>{ coin, to }</td></tr><tr><td>bridge.withdraw</td><td>{ asset, amount, to }</td></tr></tbody></table></div>
+
+      <h2 id="mcp">AI agents</h2>
+      <p>{name} speaks MCP. Add <code><span class="origin"></span>/mcp</code> as a connector in Claude, ChatGPT or any MCP client and your agent can read blocks, receipts and coins, quote trades, and send transactions it signs with its own {settles} key.</p>
+
+      <h2 id="faq">Questions</h2>
+      <h3>Do I need a new wallet?</h3><p>No. Your {settles} address is your {name} account, and your existing wallet signs everything.</p>
+      <h3>What can someone learn from the explorer?</h3><p>That a transaction of a given type happened in a given block, and whether it applied. Not who sent it, who received it, or how much.</p>
+      <h3>What can someone learn from {settles}?</h3><p>That an address deposited into the door, or was paid from it, and the receipts of {name} blocks. Nothing that happens between a deposit and a withdrawal reaches {settles}.</p>
+      <h3>Can I withdraw to a different address than I deposited from?</h3><p>Yes. A withdrawal names any {settles} address.</p>
+      <h3>How do I check that the chain is honest about its history?</h3><p>Take any receipt from {settles}, find the same block range in the explorer, recompute the Merkle root of the block hashes and the checkpoint hash, and compare. Every block also carries the producer's signature over its hash.</p>
+      <h3>What does a creator earn?</h3><p>Half of the 1% trade fee on every buy and sell of their coin, paid into their {name} balance in the same block as the trade.</p>
+    </article>
+  </div>
+</main>
+<footer><span>{name}. A private layer 2 on {settles}.</span><nav><a href="/">Home</a><a href="/explorer">Explorer</a><a href="/app">App</a></nav></footer>
+<script src="/brand.js?v=2"></script><script src="/common.js?v=2"></script><script src="/scene.js?v=2"></script>
+<script>
+(() => {
+  const { $, $$, B, api, esc, ago, short, int, nav, units } = L2, seg = location.pathname.split('/')[1];
+  // one document for every chain this runs on: fill the names in, and keep only the parts that apply
+  const fill = { name: B.name, settles: B.settles, asset: B.asset, tag: B.tag, chainId: B.chainId };
+  $$('[data-only]').forEach((e) => { if (e.dataset.only !== B.wallet) e.remove(); });
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); for (let n; (n = walk.nextNode());) if (n.nodeValue.includes('{')) n.nodeValue = n.nodeValue.replace(/\{(name|settles|asset|tag|chainId)\}/g, (m, k) => fill[k]);
+  $$('.origin').forEach((e) => (e.textContent = location.origin)); $('#decs').textContent = B.decimals;
+  nav(seg === 'whitepaper' ? 'Whitepaper' : seg === 'developers' ? 'Developers' : 'Docs');
+  L2Scene.start({ gl: $('#sky'), target: () => ({ cover: 1, ring: 0, seal: 0, dim: .45, cx: innerWidth * .82, cy: 200, R: Math.min(innerWidth, 900) * .1 }) });
+  if (seg === 'developers' && !location.hash) setTimeout(() => $('#api').scrollIntoView(), 60);
+  const l1 = (id) => (!id ? '<span class="faint">waiting</span>' : id.startsWith('dev-') ? `<span class="mono">${esc(short(id, 10, 8))}</span>` : `<a class="mono" href="${B.tx(id)}" target="_blank" rel="noopener">${esc(short(id, 10, 8))} ↗</a>`), addr = (a) => (a ? `<a class="mono" href="${B.account(a)}" target="_blank" rel="noopener">${esc(a)} ↗</a>` : '<span class="faint">not set yet</span>');
+  async function proof() {
+    try { const c = await api('/api/chain'), r = await api('/api/checkpoints?limit=10'); $('#minW').textContent = units(c.rules.minWithdraw, B.decimals) + ' ' + B.asset;
+      $('#proofBox').innerHTML = `<div>Network</div><div>Mainnet</div><div>${esc(c.settlementKind)}</div><div>${addr(c.settlement)}</div><div>Chain authority</div><div>${addr(c.authority)}</div><div>Door</div><div>${addr(c.door)}</div><div>Block producer key</div><div class="mono">${esc(c.producer)}</div><div>Chain head</div><div>${int(c.head)}</div><div>Receipts written</div><div>${int(c.receipts)}</div><div>Latest sealed block</div><div>${c.sealedBlock == null ? '<span class="faint">waiting for the first seal</span>' : int(c.sealedBlock)}</div><div>Latest receipt</div><div>${l1(c.latestReceipt?.l1)}</div><div>Latest state root</div><div class="mono">${esc(c.stateRoot || '')}</div>`;
+      if (r.receipts.length) $('#recs').innerHTML = r.receipts.map((x) => `<tr><td>${int(x.from)} to ${int(x.to)}</td><td>${x.txs}</td><td>${l1(x.l1)}</td><td class="mute">${ago(x.ts)}</td></tr>`).join('');
+    } catch {}
+  }
+  proof(); setInterval(proof, 10000);
+  const links = $$('.docs aside a'), heads = links.map((a) => $(a.getAttribute('href')));
+  addEventListener('scroll', () => { let on = 0; heads.forEach((h, i) => { if (h && h.getBoundingClientRect().top < 160) on = i; }); links.forEach((a, i) => a.classList.toggle('on', i === on)); }, { passive: true });
+})();
+</script>
+</body>
+</html>
