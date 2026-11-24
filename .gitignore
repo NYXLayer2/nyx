@@ -1,0 +1,6 @@
+data/
+node_modules/
+.env
+_studio/
+brand/
+.claude/

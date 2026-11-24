@@ -1,0 +1,10 @@
+{
+  "name": "nyx",
+  "version": "0.1.0",
+  "description": "NYX: a private layer 2 on Solana. Its own blocks, private balances, payments, trades and launches, with every block sealed to Solana.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": { "start": "node server/start.js", "test": "node test/run.js" },
+  "engines": { "node": ">=22" },
+  "license": "MIT"
+}
