@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NYX | Explorer</title>
+<meta name="description" content="Every NYX block and every receipt sealed to Solana.">
+<meta name="theme-color" content="#040208">
+<link rel="icon" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css?v=2">
+</head>
+<body>
+<canvas id="sky"></canvas><canvas id="fx"></canvas>
+<main class="page" id="root"></main>
+<footer><span>NYX. A private layer 2 on Solana.</span><nav><a href="/">Home</a><a href="/docs">Docs</a><a href="/app">App</a></nav></footer>
+<script src="/brand.js?v=2"></script><script src="/common.js?v=2"></script><script src="/scene.js?v=2"></script>
+<script>
+(() => {
+  const { $, B, api, esc, ago, short, int, nav, onBlock, toast } = L2; nav('Explorer');
+  const scene = L2Scene.start({ gl: $('#sky'), fx: $('#fx'), target: () => ({ cover: 1, ring: 1, seal: 0, dim: .3, cx: innerWidth * .8, cy: 210, R: Math.min(innerWidth, 900) * .085 }) });
+  const root = $('#root'), seg = location.pathname.split('/').filter(Boolean), hx = (h) => `<span class="mono" title="${esc(h)}">${esc(short(h, 12, 10))}</span>`;
+  const l1 = (id, text) => (!id ? '<span class="faint">waiting</span>' : id.startsWith('dev-') ? `<span class="mono">${esc(short(id, 8, 6))}</span>` : `<a class="mono" href="${B.tx(id)}" target="_blank" rel="noopener">${esc(text || short(id, 8, 8))} ↗</a>`);
+  const head = (eyebrow, title, sub) => `<div class="head"><span class="eyebrow">${eyebrow}</span><h1>${title}</h1>${sub ? `<p>${sub}</p>` : ''}</div>`;
+
+  async function search(q) { q = q.trim(); if (!q) return; if (/^\d+$/.test(q)) return (location.href = '/block/' + q); try { await api('/api/blocks/' + q); return (location.href = '/block/' + q); } catch {} try { await api('/api/tx/' + q); return (location.href = '/tx/' + q); } catch {} toast('No block or transaction matches that.', 'bad'); }
+
+  async function block(id) {
+    try { const b = await api('/api/blocks/' + id);
+      root.innerHTML = head('Block', int(b.height), `Produced ${ago(b.timestamp)}.`) + `<div class="card kv" style="margin-top:34px">
+        <div>Hash</div><div class="mono">${esc(b.hash)}</div><div>Parent</div><div class="mono"><a href="/block/${b.height - 1}">${esc(b.parentHash)}</a></div><div>Time</div><div>${new Date(b.timestamp).toUTCString()}</div>
+        <div>Transactions</div><div>${b.txCount}</div><div>Tx root</div><div class="mono">${esc(b.txRoot)}</div><div>State root</div><div class="mono">${esc(b.stateRoot)}</div><div>Producer signature</div><div class="mono">${esc(b.sig)}</div>
+        <div>Receipt on ${B.settles}</div><div>${b.receipt ? l1(b.receipt, b.receipt) : '<span class="pill wait">not sealed yet</span>'}</div></div>
+        <h3 class="sec">Transactions</h3>${b.txs.length ? `<div class="card tablewrap"><table><tbody>${b.txs.map((h) => `<tr><td><a class="mono" href="/tx/${h}">${esc(h)}</a></td></tr>`).join('')}</tbody></table></div>` : '<p class="mute" style="margin-top:10px">A quiet block. Nothing moved.</p>'}
+        <div class="row" style="justify-content:flex-start;margin-top:30px"><a class="btn" href="/block/${b.height - 1}">← Older</a><a class="btn" href="/block/${b.height + 1}">Newer →</a><a class="btn" href="/explorer">All blocks</a></div>`;
+    } catch { root.innerHTML = head('Block', 'Not found', 'That block does not exist, or it is older than this node keeps.') + '<a class="btn" style="margin-top:26px" href="/explorer">All blocks</a>'; }
+  }
+  async function tx(hash) {
+    try { const t = await api('/api/tx/' + hash);
+      root.innerHTML = head('Transaction', t.type.replace(/\./g, ' '), 'This is everything the public record holds. Who sent it, who received it and how much stay with the people in it.') + `<div class="card kv" style="margin-top:34px">
+        <div>Hash</div><div class="mono">${esc(t.hash)}</div><div>Type</div><div class="mono">${esc(t.type)}</div><div>Status</div><div><span class="pill ${t.status === 'ok' ? 'ok' : 'no'}">${t.status === 'ok' ? 'applied' : 'failed'}</span></div><div>Block</div><div><a href="/block/${t.height}">${int(t.height)}</a></div><div>Time</div><div>${new Date(t.ts).toUTCString()}</div>
+        <div>Sender</div><div class="faint">private</div><div>Receiver</div><div class="faint">private</div><div>Amount</div><div class="faint">private</div></div><a class="btn" style="margin-top:26px" href="/explorer">All blocks</a>`;
+    } catch { root.innerHTML = head('Transaction', 'Not found', 'No transaction has that hash.') + '<a class="btn" style="margin-top:26px" href="/explorer">All blocks</a>'; }
+  }
+  const row = (b, fresh) => `<tr${fresh ? ' class="fresh"' : ''}><td><a href="/block/${b.height}"><b>${int(b.height)}</b></a></td><td><a href="/block/${b.height}">${hx(b.hash)}</a></td><td>${b.txCount}</td><td>${b.receipt ? l1(b.receipt) : '<span class="faint">·</span>'}</td><td class="mute" data-ts="${b.timestamp}">${ago(b.timestamp)}</td></tr>`;
+  async function list() {
+    root.innerHTML = head('Explorer', 'Every block, <em>in the open.</em>', 'Blocks, their roots and their receipts are public. What happens inside a transaction stays with the people in it.') + `
+      <form class="search" id="sf"><input id="q" placeholder="Block height, block hash or transaction hash" spellcheck="false"><button class="btn primary">Search</button></form>
+      <div class="card stats"><div><span>Chain head</span><b id="sHead">0</b></div><div><span>Sealed on ${B.settles}</span><b id="sSealed">0</b></div><div><span>Transactions</span><b id="sTx">0</b></div><div><span>Block time</span><b>1 s</b></div></div>
+      <h3 class="sec">Latest blocks</h3><div class="card tablewrap"><table><thead><tr><th>Height</th><th>Hash</th><th>Txs</th><th>${B.settles} receipt</th><th>Time</th></tr></thead><tbody id="rows"></tbody></table></div><button class="btn" id="older" style="margin-top:16px">Older</button>
+      <h3 class="sec">Receipts on ${B.settles}</h3><div class="card tablewrap"><table><thead><tr><th>Blocks</th><th>Txs</th><th>Receipt</th><th>State root</th><th>Time</th></tr></thead><tbody id="recs"><tr><td colspan="5" class="faint">No receipts yet.</td></tr></tbody></table></div>`;
+    $('#sf').onsubmit = (e) => { e.preventDefault(); search($('#q').value); };
+    let oldest = 0, lastSealed = null;
+    const page = async (before) => { const p = await api('/api/blocks' + (before ? '?before=' + before : '')); if (!before) $('#rows').innerHTML = ''; $('#rows').insertAdjacentHTML('beforeend', p.blocks.map((b) => row(b)).join('')); oldest = p.blocks.length ? p.blocks[p.blocks.length - 1].height : oldest; if (oldest <= p.oldest) $('#older').hidden = true; };
+    const stats = async () => { try { const c = await api('/api/chain'); $('#sHead').textContent = int(c.head); $('#sSealed').textContent = c.sealedBlock == null ? 'soon' : int(c.sealedBlock); $('#sTx').textContent = int(c.txCount); if (c.sealedBlock !== lastSealed) { if (lastSealed !== null) scene.sealed(); lastSealed = c.sealedBlock; const r = await api('/api/checkpoints?limit=12'); if (r.receipts.length) $('#recs').innerHTML = r.receipts.map((x) => `<tr><td>${int(x.from)} to ${int(x.to)}</td><td>${x.txs}</td><td>${l1(x.l1)}</td><td>${hx(x.stateRoot)}</td><td class="mute" data-ts="${x.ts}">${ago(x.ts)}</td></tr>`).join(''); } } catch {} };
+    $('#older').onclick = () => page(oldest); await page(); stats(); setInterval(stats, 4000);
+    onBlock((b) => { scene.block(); $('#sHead').textContent = int(b.height); const tb = $('#rows'); tb.insertAdjacentHTML('afterbegin', row(b, true)); while (tb.children.length > 60) tb.lastChild.remove(); });
+    setInterval(() => document.querySelectorAll('[data-ts]').forEach((e) => (e.textContent = ago(+e.dataset.ts))), 5000);
+  }
+  if (seg[0] === 'block' && seg[1]) block(seg[1]); else if (seg[0] === 'tx' && seg[1]) tx(seg[1]); else list();
+})();
+</script>
+</body>
+</html>
