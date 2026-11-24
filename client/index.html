@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NYX | The private layer 2 on Solana</title>
+<meta name="description" content="NYX is a private layer 2 on Solana. Hold, pay, trade and launch with nobody watching. Its own blocks, sealed to Solana one receipt at a time.">
+<meta name="theme-color" content="#040208">
+<meta property="og:title" content="NYX | The private layer 2 on Solana">
+<meta property="og:description" content="Hold, pay, trade and launch with nobody watching. Its own blocks, sealed to Solana.">
+<meta property="og:image" content="/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css?v=2">
+</head>
+<body>
+<canvas id="sky"></canvas><canvas id="fx"></canvas>
+<main>
+  <section class="act hero in" data-act="0"><div>
+    <h1 class="word">NYX</h1>
+    <p>The private layer 2 on Solana</p>
+    <span class="cue">Scroll into the dark</span>
+  </div></section>
+
+  <section class="act intro" data-act="1"><div>
+    <span class="eyebrow">Introducing NYX</span>
+    <h2>Your money, with <em>no audience.</em></h2>
+    <p class="lead">Solana shows every wallet to everyone. NYX is a chain on top of it where your balance, your payments, your trades and your launches belong to you alone.</p>
+  </div></section>
+
+  <section class="act blocks" data-act="2"><div>
+    <span class="eyebrow">Real blocks</span>
+    <h2>A chain of <em>its own.</em></h2>
+    <p class="lead">One block a second, each one signed and chained to the last. Every block commits to the full state of the chain.</p>
+    <div class="stat"><span class="eyebrow">Latest block</span><div class="big" id="head">0</div></div>
+  </div></section>
+
+  <section class="act seal" data-act="3"><div>
+    <span class="eyebrow">Settled on Solana</span>
+    <h2>Sealed into Solana, <em>block by block.</em></h2>
+    <p class="lead">Every ten seconds NYX writes a receipt of its newest blocks to Solana. Anyone can open it and check it against the explorer.</p>
+    <div class="proof mono">
+      <div><span>Last sealed block</span><b id="sealed">Waiting for the first seal</b></div>
+      <div><span>Latest receipt</span><span id="receipt">None yet</span></div>
+      <div><span>Blocks</span><a href="/explorer" id="nBlocks">0</a></div>
+      <div><span>Transactions</span><a href="/explorer" id="nTxs">0</a></div>
+    </div>
+  </div></section>
+
+  <section class="act rooms" data-act="4"><div>
+    <span class="eyebrow">Four rooms</span>
+    <h2>Everything money does. <em>Unseen.</em></h2>
+    <div class="grid4">
+      <a class="room" href="/app#hold"><b>01</b><h3>Hold</h3><p>A balance nobody can look up.</p></a>
+      <a class="room" href="/app#pay"><b>02</b><h3>Pay</h3><p>Send to anyone. The amount stays between you.</p></a>
+      <a class="room" href="/app#trade"><b>03</b><h3>Trade</h3><p>Take a position without showing your hand.</p></a>
+      <a class="room" href="/app#launch"><b>04</b><h3>Launch</h3><p>Coins that start in the dark.</p></a>
+    </div>
+  </div></section>
+
+  <section class="act cta" data-act="5"><div>
+    <span class="eyebrow">Step inside</span>
+    <h2>Lights <em>out.</em></h2>
+    <div id="caBox"></div>
+    <div class="row"><a class="btn primary" href="/app">Enter NYX</a><span id="buyBox"></span></div>
+  </div></section>
+</main>
+<footer><span>NYX. A private layer 2 on Solana.</span><nav><a href="/explorer">Explorer</a><a href="/docs">Docs</a><a href="/whitepaper">Whitepaper</a><a href="/developers">Developers</a></nav></footer>
+<script src="/brand.js?v=2"></script><script src="/common.js?v=2"></script><script src="/scene.js?v=2"></script>
+<script>
+(() => {
+  const { $, $$, api, int, short, B, nav, onBlock, esc } = L2, { smooth, lerp } = L2Scene; nav();
+  // the camera: one set of numbers per act, blended by how far you have scrolled
+  const acts = $$('.act'), K = [
+    { cover: 0, ring: 0, seal: 0, dim: 0, x: .5, y: .37, r: .125 },
+    { cover: 1, ring: 0, seal: 0, dim: 0, x: .62, y: .44, r: .2 },
+    { cover: 1, ring: 1, seal: 0, dim: 0, x: .68, y: .47, r: .16 },
+    { cover: 1, ring: 1, seal: 1, dim: 0, x: .3, y: .36, r: .135 },
+    { cover: 1, ring: 1, seal: 0, dim: .35, x: .5, y: .2, r: .085 },
+    { cover: 1, ring: 1, seal: 0, dim: .05, x: .5, y: .29, r: .165 },
+  ];
+  function target() {
+    const vh = innerHeight, mid = scrollY + vh * .5, w = innerWidth, narrow = w < 900; let i = 0, t = 0;
+    for (let k = 0; k < acts.length - 1; k++) { const a = acts[k].offsetTop + acts[k].offsetHeight * (k ? .42 : .5), b = acts[k + 1].offsetTop + acts[k + 1].offsetHeight * .42; if (mid >= a) { i = k; t = smooth(0, 1, (mid - a) / (b - a)); } }
+    const A = K[i], Z = K[Math.min(K.length - 1, i + 1)], m = Math.min(w, vh), o = {};
+    for (const k in A) o[k] = lerp(A[k], Z[k], t);
+    return { cover: o.cover, ring: o.ring, seal: o.seal, dim: o.dim, cx: (narrow ? .5 : o.x) * w, cy: (narrow ? Math.min(o.y, .3) : o.y) * vh, R: o.r * m * (narrow ? .9 : 1) };
+  }
+  const scene = L2Scene.start({ gl: $('#sky'), fx: $('#fx'), target });
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) e.target.classList.add('in'); }), { threshold: .2 }); acts.forEach((a) => io.observe(a));
+
+  // live numbers
+  let shown = 0, head = 0, lastSealed = null;
+  const tick = () => { if (shown !== head) { shown += Math.ceil((head - shown) / 6); $('#head').textContent = int(shown); } requestAnimationFrame(tick); }; tick();
+  async function load() {
+    try { const c = await api('/api/chain'); head = c.head; $('#nBlocks').textContent = int(c.head); $('#nTxs').textContent = int(c.txCount);
+      if (c.sealedBlock != null) { $('#sealed').textContent = int(c.sealedBlock); const r = c.latestReceipt; if (r?.l1) $('#receipt').innerHTML = r.l1.startsWith('dev-') ? esc(short(r.l1, 8, 6)) : `<a href="${B.tx(r.l1)}" target="_blank" rel="noopener">${esc(short(r.l1, 8, 6))} ↗</a>`; if (lastSealed !== null && c.sealedBlock !== lastSealed) scene.sealed(); lastSealed = c.sealedBlock; }
+      if (c.mint && !$('#caBox').firstChild) { $('#caBox').innerHTML = `<div class="ca"><b>${B.ticker}</b><code>${esc(c.mint)}</code><button class="btn small" data-copy="${esc(c.mint)}">Copy</button></div>`; if (B.buy) $('#buyBox').innerHTML = `<a class="btn" href="${B.buy(c.mint)}" target="_blank" rel="noopener">Buy ${B.ticker}</a>`; }
+    } catch {}
+  }
+  load(); setInterval(load, 5000);
+  onBlock((b) => { head = b.height; scene.block(); $('#nBlocks').textContent = int(b.height); });
+})();
+</script>
+</body>
+</html>
